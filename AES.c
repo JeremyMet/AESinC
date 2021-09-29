@@ -52,20 +52,15 @@ uint32_t apply_tboxes(uint32_t c0, uint32_t c1, uint32_t c2, uint32_t c3) {
 }
 
 void AES_Cipher128(AES_128Key* key128, uint32_t* src, uint32_t* dest) {
-
-  // First Round
-  src[0] ^= key128->basekey[0];
-  src[1] ^= key128->basekey[1];
-  src[2] ^= key128->basekey[2];
-  src[3] ^= key128->basekey[3];
-  // Middle Rounds
   int k = 4;
   uint32_t s0, s1, s2, s3;
   uint32_t t0, t1, t2, t3;
-  s0 = src[0];
-  s1 = src[1];
-  s2 = src[2];
-  s3 = src[3];
+  // First Round
+  s0 = src[0] ^ key128->basekey[0];
+  s1 = src[1] ^ key128->basekey[1];
+  s2 = src[2] ^ key128->basekey[2];
+  s3 = src[3] ^ key128->basekey[3];
+  // Middle Rounds
   for(int i=0; i<9; i++) {
         t0 = key128->expanded_key[k+0] ^ apply_tboxes(s0 >> 24, s1 >> 16, s2 >> 8, s3);
         t1 = key128->expanded_key[k+1] ^ apply_tboxes(s1 >> 24, s2 >> 16, s3 >> 8, s0);
@@ -109,14 +104,16 @@ void main() {
   printf("0x%08x\n", res[2]);
   printf("0x%08x\n", res[3]);
 
-  uint32_t _NB_TESTS = 1000000;
+  uint32_t _NB_TESTS = 10000000;
   clock_t t0 = clock();
   for(int i=0;i<_NB_TESTS;i++) {
     AES_Cipher128(&key128, msg, res);
+    msg[0] = res[0]; msg[1] = res[1]; msg[2] = res[2]; msg[3] = res[3];
   }
   clock_t t1 = clock();
   double execution_time = (double) (t1-t0)/CLOCKS_PER_SEC;
 
-  printf("Execution time for %i runs: %fs.", _NB_TESTS, execution_time);
+  printf("Execution time for %i runs: %fs.\n", _NB_TESTS, execution_time);
+  printf("0x%08x\n", res[0]);
 
 }
