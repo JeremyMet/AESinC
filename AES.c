@@ -1,8 +1,13 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <stdint.h>
+#include <inttypes.h>
 #include "constants.h"
-
+#include <x86intrin.h>
 #include <time.h>
+
+#define LINE_SIZE   64
+#define L1_LINES    512
 
 #define rotword(x) ((x) << 8) | ((x) >> 24)
 #define sb(x) SBOX[(x)&0xFF]
@@ -93,8 +98,8 @@ void main() {
   // key = block2array(0x2b7e151628aed2a6abf7158809cf4f3c);
   // msg = block2array(0xae2d8a571e03ac9c9eb76fac45af8e51);
 
-  uint32_t key[] = {0x2b7e1516, 0x28aed2a6, 0xabf71588, 0x09cf4f3c};
-  uint32_t msg[] = {0xae2d8a57, 0x1e03ac9c, 0x9eb76fac, 0x45af8e51};
+  uint32_t key[] = {0xC07e1516, 0x28aed2a6, 0xabf71588, 0x09cf4f3c};
+  uint32_t msg[] = {0x002d8a57, 0x1e03ac9c, 0x9eb76fac, 0x45af8e51};
   uint32_t res[] = {0x00000000, 0x00000000, 0x00000000, 0x00000000};
   AES_128Key key128 = keyConstructor(key);
   AES_Cipher128(&key128, msg, res);
@@ -103,17 +108,63 @@ void main() {
   printf("0x%08x\n", res[1]);
   printf("0x%08x\n", res[2]);
   printf("0x%08x\n", res[3]);
-
-  uint32_t _NB_TESTS = 10000000;
+//
+  uint32_t _NB_TESTS = 500000;
   clock_t t0 = clock();
+//
+  register uint64_t t1, t2;
+  uint64_t time_array[4] = {0};
+//
+  double before_array[4];
+  double after_array[4];
+//
   for(int i=0;i<_NB_TESTS;i++) {
-    AES_Cipher128(&key128, msg, res);
-    msg[0] = res[0]; msg[1] = res[1]; msg[2] = res[2]; msg[3] = res[3];
-  }
-  clock_t t1 = clock();
-  double execution_time = (double) (t1-t0)/CLOCKS_PER_SEC;
+    for(int j=0;j<4;j++) {
+      unsigned int junk = 0;
+      msg[1] = rand() & 0xFFFFFFFF;
+      msg[2] = rand() & 0xFFFFFFFF;
+      msg[3] = rand() & 0xFFFFFFFF;
+      // Warm Up Execution
+      AES_Cipher128(&key128, msg, res);
+      // Real Execution
+      // Calcul du temps d'exécution.
+      t1 = __rdtscp(&junk);
+      AES_Cipher128(&key128, msg, res);
+      t2 = __rdtscp(&junk) - t1;
+      before_array[j] += t2 / (1.0*_NB_TESTS);
+      // printf("Before %u %" PRId64 "\n", i, t2);
 
-  printf("Execution time for %i runs: %fs.\n", _NB_TESTS, execution_time);
-  printf("0x%08x\n", res[0]);
+
+      // On retire une ligne de cache
+      _mm_clflush(&T0[j*LINE_SIZE]);
+      // Calcul du temps d'exécution.
+      t1 = __rdtscp(&junk);
+      AES_Cipher128(&key128, msg, res);
+      t2 = __rdtscp(&junk) - t1;
+      after_array[j] += t2 / (1.0*_NB_TESTS);
+      //
+      // printf("After %u %" PRId64 "\n", j, t2);
+      time_array[j] = t2;
+    }
+    printf("%"PRId64", %"PRId64" , %"PRId64", %"PRId64"\n", time_array[0], time_array[1], time_array[2], time_array[3]);
+  }
+  //
+  // for(int i=0;i<4;i++) {
+  //   printf("%f ", before_array[i]);
+  // }
+  //
+  printf("\n");
+  for(int i=0;i<4;i++) {
+    printf("%f ", after_array[i]-before_array[i]);
+  }
+
+
+    // msg[0] = res[0]; msg[1] = res[1]; msg[2] = res[2]; msg[3] = res[3];
+
+  // clock_t t1 = clock();
+  // double execution_time = (double) (t1-t0)/CLOCKS_PER_SEC;
+  //
+  // printf("Execution time for %i runs: %fs.\n", _NB_TESTS, execution_time);
+  // printf("0x%08x\n", res[0]);
 
 }
